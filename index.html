@@ -1,80 +1,148 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Captcha Verification</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Word Association Captcha</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      height: 100vh;
-      margin: 0;
-      background: #f2f2f2;
-    }
-    .captcha-box {
-      background: #fff;
-      padding: 20px;
-      border-radius: 8px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
-      text-align: center;
-    }
-    .hidden {
-      display: none;
-    }
-    input[type="number"] {
-      padding: 8px;
-      margin: 10px;
-      width: 60px;
-      text-align: center;
-    }
-    button {
-      padding: 10px 20px;
-      border: none;
-      border-radius: 4px;
-      background: #4caf50;
-      color: white;
-      cursor: pointer;
-    }
-    button:hover {
-      background: #45a049;
-    }
-    .code-box {
-      margin-top: 15px;
-      font-weight: bold;
-      font-size: 18px;
-      color: #333;
-    }
+    :root{--accent:#2563eb}
+    body{font-family:Inter,ui-sans-serif,system-ui,Arial;margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f3f4f6}
+    .card{width:min(680px,94vw);background:white;padding:20px;border-radius:12px;box-shadow:0 6px 18px rgba(15,23,42,0.08);text-align:center}
+    h1{margin:0 0 8px;font-size:20px}
+    p.lead{margin:0 0 16px;color:#374151}
+    .words{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin:12px 0}
+    .word{padding:10px 14px;border-radius:10px;background:#eef2ff;border:1px solid #e6e9f2;cursor:pointer;user-select:none}
+    .word.selected{background:var(--accent);color:white;border-color:transparent}
+    .controls{display:flex;gap:8px;justify-content:center;margin-top:12px}
+    button{background:var(--accent);color:white;border:0;padding:10px 14px;border-radius:8px;cursor:pointer}
+    button.secondary{background:#e5e7eb;color:#111}
+    .status{margin-top:12px;color:#065f46;font-weight:600}
+    .rounds{margin-top:8px;color:#6b7280}
+    .hidden{display:none}
+    .code{margin-top:14px;padding:12px;border-radius:8px;background:#ecfccb;color:#365314;font-weight:700}
   </style>
 </head>
 <body>
-  <div class="captcha-box">
-    <h2>Captcha Verification</h2>
-    <p id="question"></p>
-    <input type="number" id="answer" />
-    <button onclick="checkAnswer()">Verify</button>
-    <div id="result" class="code-box hidden">Your code word: <span style="color:green">iampromasternow</span></div>
+  <div class="card">
+    <h1>Human verification — Word Association</h1>
+    <p class="lead">Complete <strong>3</strong> short word association tasks. Select the correct words for each prompt to reveal the code word.</p>
+
+    <div id="challengeArea">
+      <div id="prompt" style="font-weight:700;color:#111"></div>
+      <div id="words" class="words" aria-live="polite"></div>
+      <div class="controls">
+        <button id="checkBtn">Check</button>
+        <button id="skipBtn" class="secondary">New Challenge</button>
+      </div>
+      <div class="rounds" id="rounds">Progress: 0 / 3 correct</div>
+      <div id="feedback" class="status" aria-live="polite"></div>
+    </div>
+
+    <div id="result" class="hidden">
+      <div class="code">Your code word: <span style="margin-left:8px;color:#166534">iampromasternow</span></div>
+    </div>
   </div>
 
   <script>
-    // Generate a simple math captcha
-    const num1 = Math.floor(Math.random() * 10) + 1;
-    const num2 = Math.floor(Math.random() * 10) + 1;
-    const correct = num1 + num2;
+    // Categories with words. Each category has some correct items and distractors.
+    const bank = [
+      {category: 'Animals', correct: ['Dog','Cat','Elephant','Lion','Whale'], extras: ['Car','Chair','Planet','Laptop','Shoe']},
+      {category: 'Fruits', correct: ['Apple','Banana','Orange','Grape','Mango'], extras: ['Table','Cloud','Fork','Bottle','Phone']},
+      {category: 'Vehicles', correct: ['Car','Bicycle','Truck','Bus','Motorbike'], extras: ['Tree','Pencil','Dog','Spoon','Shoe']},
+      {category: 'Colors', correct: ['Red','Blue','Green','Yellow','Purple'], extras: ['Cat','Apple','Cloud','Chair','Car']},
+      {category: 'Instruments', correct: ['Guitar','Piano','Violin','Drums','Flute'], extras: ['Banana','Dog','Car','Lamp','Book']},
+    ];
 
-    document.getElementById("question").innerText = `What is ${num1} + ${num2}?`;
+    let roundsNeeded = 3;
+    let roundsPassed = 0;
+    let current = null; // current challenge object
+    let optionsList = []; // words shown this round
 
-    function checkAnswer() {
-      const ans = parseInt(document.getElementById("answer").value);
-      if (ans === correct) {
-        document.getElementById("result").classList.remove("hidden");
-      } else {
-        alert("Wrong answer, try again!");
-      }
+    const promptEl = document.getElementById('prompt');
+    const wordsEl = document.getElementById('words');
+    const checkBtn = document.getElementById('checkBtn');
+    const skipBtn = document.getElementById('skipBtn');
+    const feedback = document.getElementById('feedback');
+    const roundsEl = document.getElementById('rounds');
+    const resultEl = document.getElementById('result');
+
+    function shuffle(a){return a.sort(()=>Math.random()-0.5)}
+
+    function makeChallenge(){
+      feedback.textContent = '';
+      // pick a random category
+      const pick = bank[Math.floor(Math.random()*bank.length)];
+      // build options: pick 3 correct and 3 extras (or variable)
+      const correctPool = shuffle([...pick.correct]).slice(0,3);
+      const extrasPool = shuffle([...pick.extras]).slice(0,3);
+      optionsList = shuffle([...correctPool, ...extrasPool]);
+      current = {category: pick.category, correct: new Set(correctPool)};
+
+      promptEl.textContent = `Select all words that are: ${pick.category}`;
+      renderOptions();
     }
+
+    function renderOptions(){
+      wordsEl.innerHTML = '';
+      optionsList.forEach(word=>{
+        const d = document.createElement('div');
+        d.className = 'word';
+        d.textContent = word;
+        d.tabIndex = 0;
+        d.setAttribute('role','button');
+        d.addEventListener('click', ()=>toggleSelect(d, word));
+        d.addEventListener('keydown', (e)=>{ if(e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSelect(d, word); } });
+        wordsEl.appendChild(d);
+      });
+    }
+
+    function toggleSelect(el, word){
+      el.classList.toggle('selected');
+    }
+
+    checkBtn.addEventListener('click', ()=>{
+      const selectedEls = Array.from(wordsEl.querySelectorAll('.word.selected'));
+      const selectedWords = selectedEls.map(e=>e.textContent);
+
+      // Evaluate
+      const correctSet = current.correct;
+      // If user selected exactly the correct set (no extras) -> pass
+      const selectedSet = new Set(selectedWords);
+      let allCorrect = true;
+
+      // check every correct is selected
+      for(const c of correctSet){ if(!selectedSet.has(c)) allCorrect = false; }
+      // check they didn't select any wrong ones
+      for(const s of selectedSet){ if(!correctSet.has(s)) allCorrect = false; }
+
+      if(allCorrect){
+        roundsPassed++;
+        roundsEl.textContent = `Progress: ${roundsPassed} / ${roundsNeeded} correct`;
+        feedback.textContent = 'Correct — well done!';
+        feedback.style.color = '#065f46';
+        if(roundsPassed >= roundsNeeded){
+          // success
+          document.getElementById('challengeArea').classList.add('hidden');
+          resultEl.classList.remove('hidden');
+          return;
+        }
+        // generate next after a short delay
+        setTimeout(()=>{ makeChallenge(); },800);
+      } else {
+        feedback.textContent = 'Incorrect. Try another challenge.';
+        feedback.style.color = '#7f1d1d';
+        // reset selection and create a fresh challenge to avoid brute force guessing
+        setTimeout(()=>{ makeChallenge(); },900);
+      }
+    });
+
+    skipBtn.addEventListener('click', ()=>{
+      // new challenge (useful if the user doesn't understand current words)
+      makeChallenge();
+    });
+
+    // init
+    makeChallenge();
   </script>
 </body>
 </html>
