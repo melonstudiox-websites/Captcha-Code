@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Captcha Verification</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+      background: #f2f2f2;
+    }
+    .captcha-box {
+      background: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+      text-align: center;
+    }
+    .hidden {
+      display: none;
+    }
+    input[type="number"] {
+      padding: 8px;
+      margin: 10px;
+      width: 60px;
+      text-align: center;
+    }
+    button {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 4px;
+      background: #4caf50;
+      color: white;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #45a049;
+    }
+    .code-box {
+      margin-top: 15px;
+      font-weight: bold;
+      font-size: 18px;
+      color: #333;
+    }
+  </style>
+</head>
+<body>
+  <div class="captcha-box">
+    <h2>Captcha Verification</h2>
+    <p id="question"></p>
+    <input type="number" id="answer" />
+    <button onclick="checkAnswer()">Verify</button>
+    <div id="result" class="code-box hidden">Your code word: <span style="color:green">iampromasternow</span></div>
+  </div>
+
+  <script>
+    // Generate a simple math captcha
+    const num1 = Math.floor(Math.random() * 10) + 1;
+    const num2 = Math.floor(Math.random() * 10) + 1;
+    const correct = num1 + num2;
+
+    document.getElementById("question").innerText = `What is ${num1} + ${num2}?`;
+
+    function checkAnswer() {
+      const ans = parseInt(document.getElementById("answer").value);
+      if (ans === correct) {
+        document.getElementById("result").classList.remove("hidden");
+      } else {
+        alert("Wrong answer, try again!");
+      }
+    }
+  </script>
+</body>
+</html>
